@@ -22,7 +22,9 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# Floors are the oldest releases this repository was actually checked against:
+# ruff 0.13 dropped UP038, and mypy 1.12 reads PEP 695 generics without a flag.
+dev = ["pytest>=8.0", "ruff>=0.13", "mypy>=1.12"]
 
 [project.scripts]
 stagegate = "stagegate.__main__:main"
@@ -39,3 +41,45 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 addopts = "-q --strict-markers"
 filterwarnings = ["error"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["src", "tests", "examples"]
+
+[tool.ruff.lint]
+select = [
+  "E", "W",    # pycodestyle
+  "F",         # pyflakes
+  "I",         # import order
+  "UP",        # pyupgrade
+  "B",         # bugbear
+  "C4",        # comprehensions
+  "SIM",       # simplify
+  "PTH",       # prefer pathlib
+  "BLE",       # blind except -- every one left in this codebase carries a noqa and a reason
+  "RUF",
+  "PLE", "PLW",
+]
+ignore = [
+  # __all__ is grouped by topic (core, policy, audit, ...) so the public surface
+  # reads as an outline. Alphabetising it would lose that.
+  "RUF022",
+  # os.open/os.write are load-bearing in audit.py: the append-only guarantee is an
+  # O_APPEND file descriptor, which pathlib does not expose.
+  "PTH123",
+  # Suggests enum.StrEnum for the str-mixin enums in stages.py. StrEnum would change
+  # str(Stage.ACT) from "Stage.ACT" to "act", and those enums are documented as a
+  # stored wire format, so the mixin stays and Stage overrides ordering explicitly.
+  "UP042",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["BLE001"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src/stagegate"]
+# The test suite deliberately builds malformed handlers and sinks to prove the
+# gate refuses them, so it is linted but not type-checked under strict mode.

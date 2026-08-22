@@ -132,17 +132,15 @@ def test_a_nested_call_after_a_failure_is_still_scoped(gate: StageGate, sink) ->
 
 
 def test_reentering_a_run_reuses_it_rather_than_splitting_the_trail() -> None:
-    with agent_run("run-1") as outer:
-        with agent_run() as inner:
-            assert inner is outer
-            assert current_correlation_id() == "run-1"
+    with agent_run("run-1") as outer, agent_run() as inner:
+        assert inner is outer
+        assert current_correlation_id() == "run-1"
 
 
 def test_a_sub_run_can_be_requested_explicitly() -> None:
-    with agent_run("run-1"):
-        with agent_run(nest=True) as inner:
-            assert inner.correlation_id != "run-1"
-            assert inner.depth == 1
+    with agent_run("run-1"), agent_run(nest=True) as inner:
+        assert inner.correlation_id != "run-1"
+        assert inner.depth == 1
     assert current_run() is None
 
 

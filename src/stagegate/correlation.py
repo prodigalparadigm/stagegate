@@ -23,7 +23,7 @@ from dataclasses import dataclass
 
 __all__ = ["RunContext", "agent_run", "current_run", "current_correlation_id", "new_id"]
 
-_CURRENT_RUN: contextvars.ContextVar["RunContext | None"] = contextvars.ContextVar(
+_CURRENT_RUN: contextvars.ContextVar[RunContext | None] = contextvars.ContextVar(
     "stagegate_current_run", default=None
 )
 

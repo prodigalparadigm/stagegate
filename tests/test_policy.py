@@ -60,7 +60,9 @@ def test_the_global_ceiling_is_applied_last_and_wins() -> None:
 
 def test_strings_are_accepted_everywhere_a_stage_is() -> None:
     policy = StagePolicy(
-        overrides={"a.b": "act"}, patterns={"c.*": "suggest"}, max_stage_by_risk={"critical": "observe"}
+        overrides={"a.b": "act"},
+        patterns={"c.*": "suggest"},
+        max_stage_by_risk={"critical": "observe"},
     )
     assert policy.resolve("a.b", Stage.OBSERVE, RiskTier.LOW).stage is Stage.ACT
     assert policy.resolve("c.d", Stage.OBSERVE, RiskTier.CRITICAL).stage is Stage.OBSERVE
@@ -96,7 +98,8 @@ max_stage_by_risk = { critical = "observe" }
 def test_json_loading(tmp_path: Path) -> None:
     path = tmp_path / "policy.json"
     path.write_text(json.dumps({"overrides": {"a.b": "act"}}), encoding="utf-8")
-    assert StagePolicy.from_file(path).resolve("a.b", Stage.OBSERVE, RiskTier.LOW).stage is Stage.ACT
+    resolved = StagePolicy.from_file(path).resolve("a.b", Stage.OBSERVE, RiskTier.LOW)
+    assert resolved.stage is Stage.ACT
 
 
 def test_a_missing_policy_file_is_a_configuration_error(tmp_path: Path) -> None:

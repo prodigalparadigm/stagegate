@@ -139,7 +139,10 @@ def test_key_patterns_cover_families_of_names() -> None:
     import re
 
     policy = RedactionPolicy(keys=frozenset(), key_patterns=(re.compile(r"^x.*header$"),))
-    assert policy({"x_auth_header": "abc", "body": "fine"}) == {"x_auth_header": REDACTED, "body": "fine"}
+    assert policy({"x_auth_header": "abc", "body": "fine"}) == {
+        "x_auth_header": REDACTED,
+        "body": "fine",
+    }
 
 
 def test_secrets_only_leaves_personal_data_readable() -> None:
@@ -178,7 +181,8 @@ def test_fingerprints_correlate_without_revealing(monkeypatch: pytest.MonkeyPatc
 
 def test_the_salt_can_come_from_the_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("STAGEGATE_REDACTION_SALT", "from-env")
-    assert RedactionPolicy(fingerprint=True)({"password": "x"})["password"].startswith("[REDACTED:fp:")
+    fingerprinted = RedactionPolicy(fingerprint=True)({"password": "x"})["password"]
+    assert fingerprinted.startswith("[REDACTED:fp:")
 
 
 def test_a_different_salt_gives_different_fingerprints() -> None:
@@ -249,7 +253,7 @@ def test_a_redactor_that_raises_withholds_everything(sink, calls) -> None:
     def act(secret_value: str) -> None:
         calls.append("ran")
 
-    result = act("do-not-log-me")
+    act("do-not-log-me")
 
     assert calls == ["ran"], "the call still happens; only the arguments are lost"
     assert "do-not-log-me" not in str(sink.records[0])
@@ -270,7 +274,7 @@ def test_an_exception_message_containing_a_secret_is_scrubbed(sink) -> None:
 
 
 def test_a_plain_function_is_a_valid_redactor(sink) -> None:
-    gate = StageGate(audit=sink, redaction=lambda args: {k: "***" for k in args})
+    gate = StageGate(audit=sink, redaction=lambda args: dict.fromkeys(args, "***"))
 
     @gate.capability("demo.act", stage=Stage.ACT)
     def act(a: str, b: str) -> None: ...

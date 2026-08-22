@@ -42,7 +42,9 @@ def test_risk_parse_rejects_nonsense() -> None:
 def test_only_execution_outcomes_report_as_executed() -> None:
     assert Outcome.EXECUTED.executed
     assert Outcome.FAILED.executed
-    for outcome in (Outcome.RECORDED, Outcome.DENIED, Outcome.TIMED_OUT, Outcome.BLOCKED, Outcome.ERROR):
+    for outcome in (
+        Outcome.RECORDED, Outcome.DENIED, Outcome.TIMED_OUT, Outcome.BLOCKED, Outcome.ERROR,
+    ):
         assert not outcome.executed
 
 

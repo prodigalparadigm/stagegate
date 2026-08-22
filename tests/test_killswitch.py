@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import time
 from pathlib import Path
 
 import pytest
@@ -26,7 +25,9 @@ def test_clear_when_nothing_is_set(kill_file: Path) -> None:
     assert state.source == "clear"
 
 
-@pytest.mark.parametrize("value", ["1", "true", "TRUE", "yes", "on", " trip ", "tripped", "stop", "kill"])
+@pytest.mark.parametrize(
+    "value", ["1", "true", "TRUE", "yes", "on", " trip ", "tripped", "stop", "kill"]
+)
 def test_recognised_true_values_trip_via_env(
     kill_file: Path, monkeypatch: pytest.MonkeyPatch, value: str
 ) -> None:
@@ -104,7 +105,9 @@ def test_with_no_sentinel_configured_only_the_env_is_consulted() -> None:
 # ------------------------------------------------------------ fail closed
 
 
-def test_an_unstattable_sentinel_path_trips(kill_file: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_an_unstattable_sentinel_path_trips(
+    kill_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     switch = KillSwitch(path=kill_file)
 
     def explode(self: Path) -> bool:
@@ -212,7 +215,7 @@ def make_gate(sink: InMemoryAuditLog, kill_file: Path, calls: list) -> tuple[Sta
 def test_a_tripped_switch_degrades_act_to_observe_without_raising(
     sink, kill_file: Path, calls
 ) -> None:
-    gate, caps = make_gate(sink, kill_file, calls)
+    _gate, caps = make_gate(sink, kill_file, calls)
     kill_file.write_text("incident 4412\n")
 
     result = caps["act"]("widget-1")
@@ -228,7 +231,7 @@ def test_a_blocked_call_still_records_its_full_intended_effect(
     sink, kill_file: Path, calls
 ) -> None:
     """The record of what it wanted to do is the reason degradation beats crashing."""
-    gate, caps = make_gate(sink, kill_file, calls)
+    _gate, caps = make_gate(sink, kill_file, calls)
     kill_file.write_text("incident 4412\n")
 
     caps["act"]("widget-1")
@@ -273,7 +276,7 @@ def test_observe_calls_do_not_consult_the_switch_at_all(sink, kill_file: Path, c
 
 
 def test_the_agent_keeps_running_after_a_trip(sink, kill_file: Path, calls) -> None:
-    gate, caps = make_gate(sink, kill_file, calls)
+    _gate, caps = make_gate(sink, kill_file, calls)
     assert caps["act"]("a").outcome is Outcome.EXECUTED
     kill_file.write_text("stop\n")
     assert caps["act"]("b").outcome is Outcome.BLOCKED

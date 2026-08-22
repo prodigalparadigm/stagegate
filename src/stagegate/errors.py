@@ -69,7 +69,9 @@ class NotExecuted(StageGateError):
         capability: Name of the capability that did not execute.
     """
 
-    def __init__(self, message: str, *, outcome: object = None, capability: str | None = None) -> None:
+    def __init__(
+        self, message: str, *, outcome: object = None, capability: str | None = None
+    ) -> None:
         super().__init__(message)
         self.outcome = outcome
         self.capability = capability
