@@ -18,12 +18,14 @@ approve, so it denies.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import queue
 import select
 import sys
 import threading
 import time
+from collections import deque
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from typing import Any, Protocol, TextIO, runtime_checkable
@@ -126,7 +128,9 @@ class StaticApprovalHandler:
     that a test of stage routing does not have to fake a terminal.
     """
 
-    def __init__(self, approved: bool, *, actor: str = "static-handler", note: str | None = None) -> None:
+    def __init__(
+        self, approved: bool, *, actor: str = "static-handler", note: str | None = None
+    ) -> None:
         self.approved = approved
         self.actor = actor
         self.note = note
@@ -216,10 +220,11 @@ class CLIApprovalHandler:
             raise TimeoutError("approval timed out")
 
         answer = answer.strip()
-        if needs_typed:
-            approved = answer == request.capability
-        else:
-            approved = answer.lower() in _APPROVE_WORDS
+        approved = (
+            answer == request.capability
+            if needs_typed
+            else answer.lower() in _APPROVE_WORDS
+        )
         self._say(out, f"-> {'approved' if approved else 'denied'}\n")
         return ApprovalResponse(
             approved,
@@ -309,6 +314,11 @@ class QueueApprovalHandler:
         on_submit: Called with each new request as it parks. Send the
             notification here. Exceptions are swallowed and recorded on
             :attr:`notify_errors` -- a broken pager must not become an approval.
+        history: How many notification failures and un-consumed arrival hints to
+            retain. Both are bounded because this object lives for the life of a
+            long-running agent, and an unbounded diagnostic list is a slow leak:
+            a pager that has been broken for a week must not be the reason the
+            process runs out of memory.
 
     Example:
         >>> handler = QueueApprovalHandler()
@@ -330,13 +340,15 @@ class QueueApprovalHandler:
         *,
         default_timeout: float = DEFAULT_TIMEOUT_SECONDS,
         on_submit: Callable[[ApprovalRequest], None] | None = None,
+        history: int = 256,
     ) -> None:
         self.default_timeout = default_timeout
         self.on_submit = on_submit
-        self.notify_errors: list[tuple[str, Exception]] = []
+        self.notify_errors: deque[tuple[str, Exception]] = deque(maxlen=max(1, history))
+        """Most recent ``history`` notification failures, oldest dropped first."""
         self._lock = threading.Lock()
         self._pending: dict[str, PendingApproval] = {}
-        self._arrivals: queue.Queue[str] = queue.Queue()
+        self._arrivals: queue.Queue[str] = queue.Queue(maxsize=max(1, history))
 
     def request_approval(self, request: ApprovalRequest) -> ApprovalResponse:
         timeout = request.timeout_s if request.timeout_s > 0 else self.default_timeout
@@ -351,7 +363,7 @@ class QueueApprovalHandler:
                     "request ids must be unique per in-flight request"
                 )
             self._pending[request.request_id] = entry
-        self._arrivals.put(request.request_id)
+        self._record_arrival(request.request_id)
 
         if self.on_submit is not None:
             try:
@@ -365,6 +377,21 @@ class QueueApprovalHandler:
         if not answered or entry.response is None:
             raise TimeoutError(f"no decision for {request.request_id} within {timeout:g}s")
         return entry.response
+
+    def _record_arrival(self, request_id: str) -> None:
+        """Hint to a polling worker that a request arrived, without blocking.
+
+        :meth:`pending` is the source of truth; this queue only exists so a worker
+        can wait rather than spin. When nobody is consuming it, the oldest hint is
+        discarded instead of letting the queue grow for the life of the process.
+        """
+        while True:
+            try:
+                self._arrivals.put_nowait(request_id)
+                return
+            except queue.Full:
+                with contextlib.suppress(queue.Empty):
+                    self._arrivals.get_nowait()
 
     def pending(self) -> list[PendingApproval]:
         """Snapshot of requests currently awaiting a decision."""

@@ -28,7 +28,7 @@ from stagegate.audit import GENESIS_HASH, SCHEMA
 
 
 def event(name: str = "demo.cap", **overrides) -> AuditEvent:
-    defaults = dict(
+    defaults: dict[str, object] = dict(  # noqa: C408 - keyword form mirrors the call site
         capability=name,
         stage=Stage.OBSERVE,
         declared_stage=Stage.OBSERVE,
@@ -324,7 +324,7 @@ def test_reading_events_back_round_trips_the_schema(tmp_path: Path) -> None:
             )
         )
 
-    restored = list(read_events(path))[0]
+    restored = next(iter(read_events(path)))
     assert restored.capability == "demo.cap"
     assert restored.stage is Stage.ACT
     assert restored.risk_tier is RiskTier.HIGH
@@ -349,8 +349,9 @@ def test_reading_skips_malformed_lines_but_strict_mode_raises(tmp_path: Path) ->
 
 def test_an_unknown_stage_from_a_newer_writer_does_not_break_a_reader(tmp_path: Path) -> None:
     path = tmp_path / "audit.jsonl"
-    path.write_text(json.dumps({"capability": "x", "stage": "teleport", "outcome": "warped"}) + "\n")
-    restored = list(read_events(path))[0]
+    record = {"capability": "x", "stage": "teleport", "outcome": "warped"}
+    path.write_text(json.dumps(record) + "\n")
+    restored = next(iter(read_events(path)))
     assert restored.stage is Stage.OBSERVE
     assert restored.outcome is Outcome.ERROR
 
@@ -499,3 +500,23 @@ def test_exactly_one_record_per_call_on_every_path(tmp_path: Path, calls) -> Non
     assert [r["capability"] for r in lines(path)] == [
         "demo.observe", "demo.denied", "demo.acted", "demo.failed",
     ]
+
+
+def test_mirror_failures_are_capped_so_a_broken_sink_is_not_a_leak() -> None:
+    """One exception object per audited call, retained forever, is a slow leak."""
+    class AlwaysBroken:
+        def emit(self, event: AuditEvent) -> AuditEvent:
+            raise AuditWriteError("mirror is down")
+
+        def preflight(self) -> None: ...
+
+        def close(self) -> None: ...
+
+    primary = InMemoryAuditLog()
+    multi = MultiSink(primary, AlwaysBroken(), history=5)
+    for index in range(50):
+        multi.emit(event(name=f"demo.cap{index}"))
+
+    assert len(primary.records) == 50, "the log of record still gets every event"
+    assert len(multi.errors) == 5
+    assert all(isinstance(exc, AuditWriteError) for _, exc in multi.errors)

@@ -21,12 +21,14 @@ is a deployment decision, not a library one (see the README).
 
 from __future__ import annotations
 
+import contextlib
 import dataclasses
 import hashlib
 import json
 import os
 import sys
 import threading
+from collections import deque
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -398,10 +400,8 @@ class JsonlAuditLog:
             if self._closed:
                 return
             self._closed = True
-            try:
+            with contextlib.suppress(OSError):  # descriptor already gone
                 os.close(self._fd)
-            except OSError:  # pragma: no cover - descriptor already gone
-                pass
 
     def __enter__(self) -> JsonlAuditLog:
         return self
@@ -498,13 +498,20 @@ class MultiSink:
     failures propagate. Later sinks are best-effort mirrors whose failures are
     collected in :attr:`errors` rather than allowed to stop an agent, because a
     flaky SIEM should not be able to halt production.
+
+    Args:
+        *sinks: The log of record first, then any mirrors.
+        history: How many mirror failures to retain. Bounded: a mirror that has
+            been down for a week would otherwise accumulate one exception object
+            per audited call for the life of the process.
     """
 
-    def __init__(self, *sinks: AuditSink) -> None:
+    def __init__(self, *sinks: AuditSink, history: int = 256) -> None:
         if not sinks:
             raise ValueError("MultiSink needs at least one sink")
         self.sinks = sinks
-        self.errors: list[tuple[AuditSink, Exception]] = []
+        self.errors: deque[tuple[AuditSink, Exception]] = deque(maxlen=max(1, history))
+        """Most recent ``history`` mirror failures, oldest dropped first."""
 
     def emit(self, event: AuditEvent) -> AuditEvent:
         primary = self.sinks[0].emit(event)
@@ -520,10 +527,10 @@ class MultiSink:
 
     def close(self) -> None:
         for sink in self.sinks:
-            try:
+            # Closing is best effort: one sink refusing to close must not leave
+            # the others open.
+            with contextlib.suppress(Exception):
                 sink.close()
-            except Exception:  # noqa: BLE001 - closing is best effort
-                pass
 
 
 @dataclass(frozen=True)
@@ -563,8 +570,8 @@ def verify_chain(path: str | os.PathLike[str]) -> ChainVerification:
     count = 0
     try:
         with open(path, encoding="utf-8") as handle:
-            for line_no, line in enumerate(handle, start=1):
-                line = line.strip()
+            for line_no, raw_line in enumerate(handle, start=1):
+                line = raw_line.strip()
                 if not line:
                     continue
                 expected_seq += 1
@@ -588,7 +595,8 @@ def verify_chain(path: str | os.PathLike[str]) -> ChainVerification:
                 if record.get("prev_hash") != prev:
                     return ChainVerification(
                         False, count, expected_seq,
-                        f"line {line_no}: prev_hash does not match the previous record's hash", prev,
+                        f"line {line_no}: prev_hash does not match the previous "
+                        f"record's hash", prev,
                     )
                 digest = chain_digest(record, prev)
                 if record.get("hash") != digest:
@@ -617,8 +625,8 @@ def read_events(path: str | os.PathLike[str], *, strict: bool = False) -> Iterat
         AuditLogCorruption: on a malformed line when ``strict`` is set.
     """
     with open(path, encoding="utf-8") as handle:
-        for line_no, line in enumerate(handle, start=1):
-            line = line.strip()
+        for line_no, raw_line in enumerate(handle, start=1):
+            line = raw_line.strip()
             if not line:
                 continue
             try:

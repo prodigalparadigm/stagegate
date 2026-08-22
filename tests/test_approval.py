@@ -166,7 +166,10 @@ def test_queue_handler_blocks_until_another_thread_resolves() -> None:
 
     request = handler.next_request(timeout=2.0)
     assert request is not None
-    assert handler.resolve(request.request_id, True, actor="ops@example.com", note="checked") is True
+    delivered = handler.resolve(
+        request.request_id, True, actor="ops@example.com", note="checked"
+    )
+    assert delivered is True
 
     thread.join(timeout=5.0)
     assert result[0].approved is True
@@ -210,10 +213,27 @@ def test_a_request_can_only_be_decided_once() -> None:
     assert responses[0].actor == "first"
 
 
+def _call_and_capture(handler, request) -> BaseException | None:
+    """Run ``request_approval`` on a worker thread and hand the exception back.
+
+    A bare ``pytest.raises`` inside a thread target loses its AssertionError with
+    the thread, so the test could not fail when the call unexpectedly *succeeded*.
+    The main thread asserts on the returned exception instead.
+    """
+    try:
+        handler.request_approval(request)
+    except BaseException as exc:  # handed back to the thread that can assert on it
+        return exc
+    return None
+
+
 def test_pending_exposes_what_is_waiting() -> None:
     handler = QueueApprovalHandler()
+    outcome: list[BaseException | None] = []
     thread = threading.Thread(
-        target=lambda: pytest.raises(TimeoutError, handler.request_approval, make_request(timeout=0.5))
+        target=lambda: outcome.append(
+            _call_and_capture(handler, make_request(timeout=0.5))
+        )
     )
     thread.start()
     deadline = time.monotonic() + 2.0
@@ -224,6 +244,8 @@ def test_pending_exposes_what_is_waiting() -> None:
     assert pending[0].request.capability == "demo.cap"
     assert pending[0].request.summary().startswith("[moderate] demo.cap")
     thread.join(timeout=5.0)
+    assert not thread.is_alive()
+    assert isinstance(outcome[0], TimeoutError), "an unanswered request must time out"
 
 
 def test_deny_all_is_what_an_operator_reaches_for() -> None:
@@ -336,8 +358,11 @@ def test_the_request_a_handler_sees_carries_the_run_identity(sink) -> None:
 def test_a_duplicate_pending_request_id_is_refused() -> None:
     """Two in-flight requests sharing an id would let one decision resolve the wrong call."""
     handler = QueueApprovalHandler()
+    outcome: list[BaseException | None] = []
     thread = threading.Thread(
-        target=lambda: pytest.raises(TimeoutError, handler.request_approval, make_request(timeout=1.0))
+        target=lambda: outcome.append(
+            _call_and_capture(handler, make_request(timeout=1.0))
+        )
     )
     thread.start()
     deadline = time.monotonic() + 2.0
@@ -347,6 +372,10 @@ def test_a_duplicate_pending_request_id_is_refused() -> None:
     with pytest.raises(ApprovalError, match="already pending"):
         handler.request_approval(make_request(timeout=1.0))
     thread.join(timeout=5.0)
+    assert not thread.is_alive()
+    assert isinstance(outcome[0], TimeoutError), (
+        "the first waiter must keep its own timeout, not be resolved by the duplicate"
+    )
 
 
 def test_a_gate_records_a_duplicate_request_id_error_as_a_refusal(sink, calls) -> None:
@@ -366,3 +395,42 @@ def test_a_gate_records_a_duplicate_request_id_error_as_a_refusal(sink, calls) -
     assert calls == []
     assert result.outcome is Outcome.ERROR
     assert "approval store unavailable" in (sink.events[0].decision_note or "")
+
+
+# ------------------------------------------------- bounded in a long-lived process
+
+
+def test_arrival_hints_do_not_grow_without_bound_when_nobody_polls() -> None:
+    """pending() is the source of truth; the hint queue must not leak.
+
+    A production handler outlives every request it serves. If a deployment reads
+    ``pending()`` on a timer instead of calling ``next_request()``, nothing drains
+    the arrival queue, and an unbounded one is a leak that only shows up in week
+    three of a rollout.
+    """
+    handler = QueueApprovalHandler(history=4)
+
+    for index in range(200):
+        handler._record_arrival(f"apr-{index}")
+
+    assert handler._arrivals.qsize() == 4
+    kept = [handler._arrivals.get_nowait() for _ in range(4)]
+    assert kept == ["apr-196", "apr-197", "apr-198", "apr-199"], "the newest hints survive"
+
+
+def test_notification_failures_are_capped_at_the_history_size() -> None:
+    def always_broken(request: ApprovalRequest) -> None:
+        raise ConnectionError("pager unreachable")
+
+    handler = QueueApprovalHandler(default_timeout=0.01, history=3, on_submit=always_broken)
+    for index in range(10):
+        with pytest.raises(TimeoutError):
+            handler.request_approval(
+                dataclasses.replace(make_request(timeout=0.01), request_id=f"apr-{index}")
+            )
+
+    assert len(handler.notify_errors) == 3, "oldest failures are dropped, not accumulated"
+    assert [request_id for request_id, _ in handler.notify_errors] == [
+        "apr-7", "apr-8", "apr-9",
+    ]
+    assert all(isinstance(exc, ConnectionError) for _, exc in handler.notify_errors)
