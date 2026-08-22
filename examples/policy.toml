@@ -1,0 +1,22 @@
+# Stage policy for the triage agent.
+#
+# This file is the promotion record. Changing a stage here is the change a
+# reviewer approves; nothing in the agent's code decides how far a capability is
+# promoted. Keep it in version control and require a review on it.
+
+[stagegate]
+
+# Nothing declared `critical` may be promoted past `suggest`, whatever any
+# override below says. Ceilings only ever lower a stage.
+max_stage_by_risk = { critical = "suggest" }
+
+# Read-only lookups act. Promoted 2026-07-14 by a.ochieng after two weeks of
+# shadow traffic; see reports/2026-07-14-triage.md.
+[stagegate.overrides]
+"tickets.search" = "act"
+"tickets.comment" = "suggest"
+
+# Everything under `tickets.` that is not named above stays in shadow mode.
+# A capability nobody has explicitly promoted does not act.
+[stagegate.patterns]
+"tickets.*" = "observe"
