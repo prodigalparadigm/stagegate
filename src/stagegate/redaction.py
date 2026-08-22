@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import math
 import os
 import re
 from collections.abc import Mapping, Sequence, Set
@@ -69,7 +70,7 @@ DEFAULT_PII_KEYS: frozenset[str] = frozenset(
         "accountnumber", "routingnumber", "iban", "bic", "swift", "email",
         "emailaddress", "phone", "phonenumber", "mobile", "address", "streetaddress",
         "postaladdress", "zipcode", "postcode", "passportnumber", "driverslicense",
-        "medicalrecordnumber", "mrn", "policynumber",
+        "medicalrecordnumber", "mrn",
     }
 )
 """Argument names treated as personal data. Normalised form."""
@@ -232,8 +233,8 @@ class RedactionPolicy:
     def _walk_value(self, value: Any, depth: int, seen: set[int]) -> Any:
         if value is None or isinstance(value, (bool, int, float)):
             # bool before int matters only for JSON fidelity; both are safe as-is.
-            if isinstance(value, float) and (value != value or value in (float("inf"), float("-inf"))):
-                return repr(value)  # NaN/Infinity are not valid JSON
+            if isinstance(value, float) and not math.isfinite(value):
+                return repr(value)  # NaN and Infinity are not valid JSON
             return value
         if isinstance(value, str):
             return self._scrub_string(value)
@@ -279,7 +280,7 @@ class RedactionPolicy:
         # a __repr__ that raises take down the caller's capability.
         try:
             text = repr(value)
-        except Exception:
+        except Exception:  # noqa: BLE001 - a __repr__ that raises must not break the call
             return _UNSERIALISABLE
         return self._scrub_string(text)
 
@@ -297,6 +298,6 @@ def _safe_text(text: str, policy: Redactor | None, limit: int = 2000) -> str:
         return text
     try:
         scrubbed = policy({"message": text}).get("message", REDACTED)
-    except Exception:
+    except Exception:  # noqa: BLE001 - an unscrubbable string is withheld, not emitted raw
         return REDACTED
     return scrubbed if isinstance(scrubbed, str) else REDACTED

@@ -31,7 +31,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from stagegate import (  # noqa: E402
+from stagegate import (
     CLIApprovalHandler,
     JsonlAuditLog,
     KillSwitch,
@@ -47,14 +47,18 @@ from stagegate import (  # noqa: E402
 )
 
 # --------------------------------------------------------------------------
-# Fake backends. In a real deployment these are the client's ticketing system,
-# their paging provider, their CRM. Nothing about the gating changes.
+# Fake backends. In a real deployment these are your ticketing system, your
+# paging provider, your CRM. Nothing about the gating changes.
 # --------------------------------------------------------------------------
 
 TICKETS: dict[str, dict[str, Any]] = {
     "T-1001": {"title": "Checkout returns 500 for EU cards", "status": "open", "priority": "P1"},
     "T-1002": {"title": "Docs typo on the pricing page", "status": "open", "priority": "P4"},
-    "T-1003": {"title": "Export job silently truncates at 10k rows", "status": "open", "priority": "P2"},
+    "T-1003": {
+        "title": "Export job silently truncates at 10k rows",
+        "status": "open",
+        "priority": "P2",
+    },
 }
 COMMENTS: list[tuple[str, str]] = []
 PAGES: list[str] = []
@@ -161,7 +165,10 @@ def run_agent(gate: StageGate, caps: dict[str, Any]) -> None:
 
         for ticket_id in found.value_or([]):
             commented = caps["comment"](ticket_id, "Triage: reproduced on staging.")
-            print(f"tickets.comment  -> {commented.outcome.value:9} decision={commented.event.decision.value}")
+            print(
+                f"tickets.comment  -> {commented.outcome.value:9} "
+                f"decision={commented.event.decision.value}"
+            )
 
             moved = caps["transition"](ticket_id, "in_progress")
             print(
@@ -171,7 +178,10 @@ def run_agent(gate: StageGate, caps: dict[str, Any]) -> None:
             )
 
             paged = caps["page"]("platform-primary", ticket_id, reporter_email="ada@example.com")
-            print(f"oncall.page      -> {paged.outcome.value:9} decision={paged.event.decision.value}")
+            print(
+                f"oncall.page      -> {paged.outcome.value:9} "
+                f"decision={paged.event.decision.value}"
+            )
 
         escalated = caps["escalate"]("T-1003")
         print(f"triage.escalate  -> {escalated.outcome.value:9} (nested calls share the run id)")
@@ -182,7 +192,9 @@ def run_agent(gate: StageGate, caps: dict[str, Any]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--interactive", action="store_true", help="approve at the terminal")
     parser.add_argument("--tripped", action="store_true", help="start with the kill switch tripped")
     parser.add_argument("--report", action="store_true", help="print the full dry-run report")
@@ -214,7 +226,10 @@ def main(argv: list[str] | None = None) -> int:
     print(f"statuses: { {k: v['status'] for k, v in TICKETS.items()} }")
 
     check = verify_chain(log_path)
-    print(f"\naudit chain: ok={check.ok} records={check.count} head={(check.head_hash or '')[:16]}...")
+    print(
+        f"\naudit chain: ok={check.ok} records={check.count} "
+        f"head={(check.head_hash or '')[:16]}..."
+    )
     print(f"audit log  : {log_path}")
 
     report = report_from_log(log_path)

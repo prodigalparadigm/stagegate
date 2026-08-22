@@ -12,7 +12,9 @@ management, and they need to know which one wins. This module is those two ways.
    *abstains*: it moves on to the file sentinel rather than clearing it.
 2. The file sentinel. If the file exists, the switch is tripped and the file's
    first line is recorded as the reason.
-3. If neither trips, the switch is clear.
+3. Any ``extra_probes``, in the order given. A probe that returns ``True`` trips;
+   a probe that raises trips.
+4. If nothing above trips, the switch is clear.
 
 The asymmetry in step 1 is deliberate. Anyone with a shell can trip the switch,
 which is what you want in an incident; nobody with a shell can *clear* a sentinel
@@ -34,6 +36,7 @@ have a complete record of what it wanted to do while it was stopped.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import threading
 import time
@@ -43,7 +46,9 @@ from pathlib import Path
 
 __all__ = ["KillSwitchState", "KillSwitch", "TRUE_VALUES", "FALSE_VALUES"]
 
-TRUE_VALUES: frozenset[str] = frozenset({"1", "true", "yes", "on", "trip", "tripped", "stop", "kill"})
+TRUE_VALUES: frozenset[str] = frozenset(
+    {"1", "true", "yes", "on", "trip", "tripped", "stop", "kill"}
+)
 """Environment values that trip the switch (case-insensitive)."""
 
 FALSE_VALUES: frozenset[str] = frozenset({"0", "false", "no", "off", "clear", ""})
@@ -87,6 +92,11 @@ class KillSwitch:
             returns ``(tripped, reason)``. A probe that raises trips the switch.
             Use for a feature-flag service or a control-plane heartbeat -- but see
             ``cache_ttl``, because a probe runs on every guarded call.
+
+            Probes are called synchronously and are **not** given a deadline: a
+            probe that hangs hangs the capability call. StageGate cannot impose
+            one without a thread per check, so a probe that talks to the network
+            must enforce its own timeout and should be paired with a ``cache_ttl``.
         cache_ttl: Seconds to reuse a reading. Defaults to ``0.0``: check every
             time. A stale *clear* reading is precisely the failure this component
             exists to prevent, so caching is opt-in. A local ``stat`` costs a few
@@ -179,7 +189,10 @@ class KillSwitch:
                 tripped, reason = probe()
             except Exception as exc:  # noqa: BLE001 - a probe that throws fails closed
                 return KillSwitchState(
-                    True, "probe", f"kill-switch probe {name!r} raised {type(exc).__name__}: {exc}", now
+                    True,
+                    "probe",
+                    f"kill-switch probe {name!r} raised {type(exc).__name__}: {exc}",
+                    now,
                 )
             if tripped:
                 return KillSwitchState(True, "probe", reason or f"probe {name!r} tripped", now)
@@ -220,10 +233,8 @@ class KillSwitch:
         """Remove the sentinel file if present. Convenience for tests and tooling."""
         path = self.path
         if path is not None:
-            try:
+            with contextlib.suppress(FileNotFoundError):
                 path.unlink()
-            except FileNotFoundError:
-                pass
         self.invalidate()
 
     def invalidate(self) -> None:
