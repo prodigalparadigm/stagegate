@@ -22,6 +22,7 @@ from stagegate import (
     report_from_log,
 )
 from stagegate.__main__ import main
+from stagegate.report import _percentile
 
 
 @pytest.fixture
@@ -289,3 +290,108 @@ def test_cli_verify_quiet_prints_nothing(shadow_log: Path, capsys) -> None:
     assert main(["verify", str(shadow_log), "--quiet"]) == 0
     captured = capsys.readouterr()
     assert captured.out == "" and captured.err == ""
+
+
+# ------------------------------------------------------------- percentiles
+
+
+@pytest.mark.parametrize(
+    "values, fraction, expected",
+    [
+        ([], 0.5, None),
+        ([7.0], 0.5, 7.0),
+        ([7.0], 0.95, 7.0),
+        # Nearest rank, no interpolation: p50 of two samples is the lower one.
+        ([10.0, 20.0], 0.5, 10.0),
+        ([10.0, 20.0], 0.95, 20.0),
+        ([10.0, 20.0, 30.0, 40.0], 0.5, 20.0),
+        ([10.0, 20.0, 30.0, 40.0, 50.0, 60.0], 0.5, 30.0),
+        # Order of arrival must not matter.
+        ([60.0, 10.0, 30.0, 20.0, 50.0, 40.0], 0.5, 30.0),
+        (list(range(1, 101)), 0.95, 95.0),
+    ],
+)
+def test_percentiles_are_nearest_rank_and_never_interpolate(values, fraction, expected) -> None:
+    """These numbers go in front of a change board; an invented one is worse than none."""
+    assert _percentile([float(v) for v in values], fraction) == expected
+
+
+def test_percentile_never_indexes_past_the_sample() -> None:
+    for size in range(1, 25):
+        sample = [float(i) for i in range(size)]
+        for fraction in (0.0, 0.5, 0.9, 0.95, 0.99, 1.0):
+            assert _percentile(sample, fraction) in sample
+
+
+def test_reported_latencies_come_from_the_recorded_events(sink) -> None:
+    gate = StageGate(audit=sink, approval=StaticApprovalHandler(True, actor="ops@example.com"))
+
+    @gate.capability("demo.approved", stage=Stage.SUGGEST)
+    def approved() -> str:
+        return "ok"
+
+    for _ in range(4):
+        approved()
+
+    report = build_report(sink.events)
+    cap = report.capabilities[0]
+    assert len(cap.approval_latencies_ms) == 4
+    assert cap.approval_rate == 1.0
+    payload = report.to_dict()["capabilities"][0]
+    assert payload["approval_latency_p50_ms"] is not None
+    assert payload["duration_p95_ms"] is not None
+
+
+# -------------------------------------------------- traceability of effects
+
+
+def test_each_intended_effect_names_the_runs_it_came_from(shadow_log: Path) -> None:
+    """A reviewer reading an effect must be able to grep back to the episodes."""
+    report = report_from_log(shadow_log)
+    transitions = next(c for c in report.capabilities if c.name == "tickets.transition")
+    group = transitions.effects[0]
+    assert group.correlation_ids, "effect groups carry the runs that produced them"
+    assert all(cid.startswith("run-") for cid in group.correlation_ids)
+
+    payload = report.to_dict()
+    effects = next(
+        c for c in payload["capabilities"] if c["capability"] == "tickets.transition"
+    )["intended_effects"]
+    assert effects[0]["example_runs"] == list(group.correlation_ids)
+
+
+def test_run_examples_are_capped_so_one_capability_cannot_bloat_the_report(sink) -> None:
+    gate = StageGate(audit=sink)
+
+    @gate.capability("demo.same", stage=Stage.OBSERVE, describe="always the same effect")
+    def same() -> None: ...
+
+    for index in range(12):
+        with agent_run(f"run-{index}"):
+            same()
+
+    group = build_report(sink.events).capabilities[0].effects[0]
+    assert group.count == 12
+    assert len(group.correlation_ids) == 5, "examples are capped; the count is not"
+
+
+# ------------------------------------------------------------- CLI edges
+
+
+def test_cli_verify_reports_an_unreadable_path_as_a_usage_error(tmp_path: Path, capsys) -> None:
+    """A directory is an I/O mistake, not a verdict that the chain is broken."""
+    assert main(["verify", str(tmp_path)]) == 2
+    assert "cannot read" in capsys.readouterr().err
+
+
+def test_cli_verify_on_a_missing_log_fails_rather_than_passing_vacuously(tmp_path: Path) -> None:
+    assert main(["verify", str(tmp_path / "nope.jsonl")]) == 1
+
+
+def test_cli_verify_counts_a_single_record_in_the_singular(
+    shadow_log: Path, tmp_path: Path, capsys
+) -> None:
+    one = tmp_path / "one.jsonl"
+    one.write_text(shadow_log.read_text(encoding="utf-8").splitlines()[0] + "\n", encoding="utf-8")
+    assert main(["verify", str(one)]) == 0
+    assert "1 record verified" in capsys.readouterr().out

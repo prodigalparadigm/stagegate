@@ -56,10 +56,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
     if args.command == "verify":
-        result = verify_chain(args.log)
+        try:
+            result = verify_chain(args.log)
+        except OSError as exc:
+            # verify_chain reports a *missing* log as a result; anything else
+            # (a directory, a permission error, a bad mount) is an I/O problem
+            # with the invocation, not a verdict on the chain.
+            print(f"cannot read {args.log}: {exc}", file=sys.stderr)
+            return 2
         if not args.quiet:
             if result.ok:
-                print(f"OK: {result.count} records verified; head {result.head_hash}")
+                plural = "" if result.count == 1 else "s"
+                print(f"OK: {result.count} record{plural} verified; head {result.head_hash}")
             else:
                 print(
                     f"FAILED at record {result.first_bad_seq}: {result.reason}",

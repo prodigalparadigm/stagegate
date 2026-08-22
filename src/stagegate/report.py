@@ -17,6 +17,7 @@ have rejected every one of them.
 from __future__ import annotations
 
 import json
+import math
 import os
 from collections import Counter, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
@@ -30,17 +31,36 @@ __all__ = ["DryRunReport", "CapabilityReport", "EffectGroup", "build_report", "r
 
 
 def _percentile(values: Sequence[float], fraction: float) -> float | None:
-    """Nearest-rank percentile. Small samples are the norm here, so no interpolation."""
+    """Nearest-rank percentile: the smallest value at or above ``fraction`` of the sample.
+
+    No interpolation. Samples here are small -- a capability with nine approvals
+    has a p95, and inventing a value between two observed latencies would be
+    presenting a number nobody measured to a change board.
+
+    >>> _percentile([10.0, 20.0], 0.5), _percentile([10.0, 20.0], 0.95)
+    (10.0, 20.0)
+    >>> _percentile([], 0.5) is None
+    True
+    """
     if not values:
         return None
     ordered = sorted(values)
-    index = min(len(ordered) - 1, max(0, round(fraction * len(ordered) + 0.5) - 1))
+    rank = math.ceil(fraction * len(ordered))
+    index = min(len(ordered) - 1, max(0, rank - 1))
     return round(ordered[index], 1)
 
 
 @dataclass(frozen=True)
 class EffectGroup:
-    """A distinct intended effect and how often the agent wanted it."""
+    """A distinct intended effect and how often the agent wanted it.
+
+    Attributes:
+        effect: The rendered intended effect, as logged.
+        count: How many calls produced this effect.
+        example_arguments: Redacted arguments from the first such call.
+        correlation_ids: Up to five runs that produced it, so a reviewer reading
+            the report can grep the log back to the episodes it came from.
+    """
 
     effect: str
     count: int
@@ -210,6 +230,7 @@ class DryRunReport:
                             "effect": group.effect,
                             "count": group.count,
                             "example_arguments": dict(group.example_arguments),
+                            "example_runs": list(group.correlation_ids),
                         }
                         for group in cap.effects
                     ],
@@ -274,7 +295,10 @@ class DryRunReport:
 
         add("## Capabilities")
         add("")
-        add("| Capability | Risk | Declared | Calls | Shadow | Distinct effects | Blocked | Errors |")
+        add(
+            "| Capability | Risk | Declared | Calls | Shadow | "
+            "Distinct effects | Blocked | Errors |"
+        )
         add("| --- | --- | --- | ---: | ---: | ---: | ---: | ---: |")
         for cap in self.capabilities:
             add(
@@ -329,7 +353,11 @@ class DryRunReport:
                 add(
                     f"Approval latency: p50 {_percentile(cap.approval_latencies_ms, 0.5)} ms, "
                     f"p95 {_percentile(cap.approval_latencies_ms, 0.95)} ms"
-                    + (f" - approval rate {cap.approval_rate:.0%}" if cap.approval_rate is not None else "")
+                    + (
+                        f" - approval rate {cap.approval_rate:.0%}"
+                        if cap.approval_rate is not None
+                        else ""
+                    )
                 )
                 if cap.approvers:
                     who = ", ".join(f"{name} ({n})" for name, n in cap.approvers.most_common(5))

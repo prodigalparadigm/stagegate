@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from stagegate import (
     ConfigurationError,
     Decision,
-    InMemoryAuditLog,
     NotExecuted,
     Outcome,
     RiskTier,
@@ -297,7 +298,7 @@ def test_invoke_dispatches_by_name_like_a_tool_call(gate: StageGate, calls) -> N
 
 def test_invoke_on_an_unknown_name_raises_with_the_options(gate: StageGate, calls) -> None:
     build(gate, Stage.ACT, calls)
-    with pytest.raises(KeyError, match="demo.act"):
+    with pytest.raises(KeyError, match=re.escape("demo.act")):
         gate.invoke("demo.nonexistent")
 
 
@@ -343,3 +344,78 @@ def test_result_exposes_the_run_it_belonged_to(gate: StageGate, calls) -> None:
     assert result.correlation_id == "run-fixed" == run.correlation_id
     assert result.capability == "demo.act"
     assert result.stage is Stage.ACT
+
+
+# ------------------------------------------------- suppression has a limit
+
+
+def test_suppressing_errors_does_not_suppress_keyboard_interrupt(sink, calls) -> None:
+    """propagate_errors=False hides failures, not the operator pressing Ctrl-C."""
+    gate = StageGate(audit=sink, propagate_errors=False)
+
+    @gate.capability("demo.interruptible", stage=Stage.ACT)
+    def slow() -> None:
+        calls.append("started")
+        raise KeyboardInterrupt
+
+    with pytest.raises(KeyboardInterrupt):
+        slow()
+
+    assert calls == ["started"]
+    assert len(sink.events) == 1, "the record is still written before it escapes"
+    assert sink.events[0].outcome is Outcome.FAILED
+    assert sink.events[0].error == {"type": "KeyboardInterrupt", "message": ""}
+
+
+def test_suppressing_errors_does_not_suppress_system_exit(sink) -> None:
+    gate = StageGate(audit=sink, propagate_errors=False)
+
+    @gate.capability("demo.exiting", stage=Stage.ACT, propagate_errors=False)
+    def bail() -> None:
+        raise SystemExit(3)
+
+    with pytest.raises(SystemExit):
+        bail()
+    assert sink.events[0].outcome is Outcome.FAILED
+
+
+def test_ordinary_exceptions_are_still_suppressed(sink) -> None:
+    """The narrowing above must not quietly re-enable propagation for everything."""
+    gate = StageGate(audit=sink, propagate_errors=False)
+
+    @gate.capability("demo.ordinary", stage=Stage.ACT)
+    def boom() -> None:
+        raise ValueError("bad input")
+
+    result = boom()
+    assert result.outcome is Outcome.FAILED
+    assert isinstance(result.error, ValueError)
+
+
+# ------------------------------------------------------------- manifest edges
+
+
+@pytest.mark.parametrize(
+    "docstring, expected",
+    [
+        (None, ""),
+        ("", ""),
+        ("   ", ""),
+        ("\n\n", ""),
+        ("One-line summary.", "One-line summary."),
+        (
+            "\n  Leading blank line, then this.\n\n  More detail.\n",
+            "Leading blank line, then this.",
+        ),
+    ],
+)
+def test_manifest_summary_survives_any_docstring(sink, docstring, expected) -> None:
+    """A capability with an odd docstring must not break startup introspection."""
+    gate = StageGate(audit=sink)
+
+    def thing() -> None:
+        pass
+
+    thing.__doc__ = docstring
+    gate.register(thing, name="demo.doc", stage=Stage.OBSERVE)
+    assert gate.manifest()[0]["summary"] == expected

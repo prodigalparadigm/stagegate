@@ -35,7 +35,7 @@ import inspect
 import time
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from typing import Any, Generic, ParamSpec, TypeVar, cast
+from typing import Any, ParamSpec, TypeVar, cast
 
 from .approval import (
     DEFAULT_TIMEOUT_SECONDS,
@@ -44,7 +44,7 @@ from .approval import (
     ApprovalResponse,
 )
 from .audit import AuditEvent, AuditSink, InMemoryAuditLog, StreamAuditSink
-from .correlation import RunContext, current_run, new_id, _scoped
+from .correlation import RunContext, _scoped, current_run, new_id
 from .errors import ApprovalError, AuditWriteError, ConfigurationError, NotExecuted
 from .killswitch import KillSwitch, KillSwitchState
 from .policy import StagePolicy
@@ -53,6 +53,15 @@ from .stages import Decision, Outcome, RiskTier, Stage
 
 __all__ = ["StageGate", "Capability", "CapabilityResult"]
 
+def _first_line(text: str | None) -> str:
+    """First non-empty line of a docstring, or ``""``. Never raises on odd input."""
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if stripped:
+            return stripped
+    return ""
+
+
 P = ParamSpec("P")
 T = TypeVar("T")
 
@@ -60,7 +69,7 @@ Describer = Callable[..., str] | str
 
 
 @dataclass(frozen=True, slots=True)
-class CapabilityResult(Generic[T]):
+class CapabilityResult[T]:
     """What a gated call returns.
 
     Attributes:
@@ -196,7 +205,9 @@ class StageGate:
         default_stage: Stage used when a capability does not declare one.
         propagate_errors: Whether an exception from inside a capability
             re-raises after the audit record is written. Default ``True``: gating
-            a function should not change what happens when it fails.
+            a function should not change what happens when it fails. ``False``
+            suppresses ordinary exceptions only -- ``KeyboardInterrupt`` and
+            ``SystemExit`` always escape.
         strict_audit: When ``True`` (default), the sink must pass a preflight
             check before any execution is allowed. A capability that cannot be
             audited does not run.
@@ -405,7 +416,7 @@ class StageGate:
                     "stage_source": resolution.source,
                     "risk_tier": entry.risk.value,
                     "has_approval_handler": bool(entry.approval or self.approval),
-                    "summary": (entry.doc or "").strip().splitlines()[0] if entry.doc else "",
+                    "summary": _first_line(entry.doc),
                 }
             )
         return rows
@@ -485,7 +496,7 @@ class StageGate:
                 with _scoped(child):
                     value = entry.func(*args, **dict(kwargs))
                 outcome = Outcome.EXECUTED
-            except BaseException as exc:  # noqa: BLE001 - re-raised below unless suppressed
+            except BaseException as exc:  # noqa: BLE001 - re-raised below; see _should_reraise
                 error = exc
                 outcome = Outcome.FAILED
             finally:
@@ -518,10 +529,7 @@ class StageGate:
         )
         written, audit_degraded = self._emit(event)
 
-        propagate = (
-            entry.propagate_errors if entry.propagate_errors is not None else self.propagate_errors
-        )
-        if error is not None and propagate:
+        if error is not None and self._should_reraise(entry, error):
             raise error
 
         return CapabilityResult(
@@ -536,10 +544,7 @@ class StageGate:
 
     def _merge_labels(self, run: RunContext | None) -> dict[str, str] | None:
         run_labels = dict(run.labels) if run and run.labels else {}
-        if self.labels:
-            merged = {**self.labels, **run_labels}
-        else:
-            merged = run_labels
+        merged = {**self.labels, **run_labels} if self.labels else run_labels
         return merged or None
 
     def _redact(
@@ -634,10 +639,12 @@ class StageGate:
             response = handler.request_approval(request)
         except TimeoutError as exc:
             latency = round((time.perf_counter() - started) * 1000, 3)
-            return Decision.TIMED_OUT, None, _safe_text(str(exc) or "approval timed out", redactor), latency
+            timed_out = _safe_text(str(exc) or "approval timed out", redactor)
+            return Decision.TIMED_OUT, None, timed_out, latency
         except ApprovalError as exc:
             latency = round((time.perf_counter() - started) * 1000, 3)
-            return Decision.ERROR, None, _safe_text(f"approval handler failed: {exc}", redactor), latency
+            failed = _safe_text(f"approval handler failed: {exc}", redactor)
+            return Decision.ERROR, None, failed, latency
         except Exception as exc:  # noqa: BLE001 - a handler that breaks cannot approve
             latency = round((time.perf_counter() - started) * 1000, 3)
             return (
@@ -659,6 +666,23 @@ class StageGate:
         if response.approved:
             return Decision.APPROVED, response.actor, note, latency
         return Decision.DENIED, response.actor, note, latency
+
+    def _should_reraise(self, entry: Capability, error: BaseException) -> bool:
+        """Whether an exception from inside a capability escapes after auditing.
+
+        ``propagate_errors=False`` suppresses *ordinary* failures so the caller can
+        inspect ``result.error`` instead. It does not suppress ``KeyboardInterrupt``,
+        ``SystemExit`` or any other non-``Exception`` ``BaseException``: those are
+        control flow for the process, not a failure of the capability, and
+        swallowing them turns Ctrl-C into a hang and ``sys.exit()`` into a no-op.
+        """
+        if not isinstance(error, Exception):
+            return True
+        return (
+            entry.propagate_errors
+            if entry.propagate_errors is not None
+            else self.propagate_errors
+        )
 
     def _error_record(
         self, error: BaseException | None, redactor: Redactor
