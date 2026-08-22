@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "stagegate"
+version = "0.1.0"
+description = "Staged, auditable rollout of agent capabilities: observe, suggest, then act."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Kathleen Bartin", email = "kathleen@prodigalparadigm.com" }]
+keywords = ["agents", "governance", "audit", "approval", "rollout", "llm"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Software Development :: Libraries",
+  "Typing :: Typed",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+stagegate = "stagegate.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/comelyhunger/stagegate"
+Source = "https://github.com/comelyhunger/stagegate"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/stagegate"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q --strict-markers"
+filterwarnings = ["error"]
