@@ -66,6 +66,17 @@ def test_the_example_runs_end_to_end() -> None:
     assert "audit chain: ok=True" in output
     assert "# Agent dry-run report" in output
 
+    # The example passes a credential-shaped default argument through the gate.
+    # The invariant the README states -- no raw argument value leaves the process
+    # through StageGate -- is only worth anything if it holds end to end, so read
+    # the log the example actually wrote and check.
+    log_line = next(line for line in output.splitlines() if line.startswith("audit log"))
+    log_path = Path(log_line.split(":", 1)[1].strip())
+    log_text = log_path.read_text(encoding="utf-8")
+    assert "sk-demo" not in log_text, "a credential-shaped argument reached the audit log"
+    assert '"api_token":"[REDACTED]"' in log_text
+    assert "sk-demo" not in output, "nor the console output the operator watches"
+
 
 def test_the_example_degrades_under_a_tripped_kill_switch() -> None:
     result = subprocess.run(
