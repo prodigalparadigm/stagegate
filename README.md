@@ -10,38 +10,43 @@ StageGate makes that rollout a ladder rather than a switch. A capability starts 
 
 ## Quickstart
 
-Python 3.12+. No runtime dependencies — standard library only. The dev extra pulls in `pytest`, `ruff` and `mypy`.
+Requires Python 3.12. No runtime dependencies — standard library only.
 
 ```bash
-uv venv && source .venv/bin/activate    # or: python3.12 -m venv .venv && source .venv/bin/activate
-uv pip install -e ".[dev]"              # or: pip install -e ".[dev]"
+git clone <this repo> && cd stagegate
+uv venv --python 3.12 && source .venv/bin/activate
+uv pip install -e ".[dev]"
+
 python -m pytest                        # 302 tests, no network, no credentials
+ruff check . && ruff format --check .   # rule set pinned in pyproject.toml
+mypy                                    # strict, src only
+
 python examples/triage_agent.py
 ```
-
-`ruff check .` and `mypy src/stagegate` both pass clean; their configuration is in `pyproject.toml`.
 
 ```python
 from stagegate import StageGate, Stage, RiskTier, JsonlAuditLog, agent_run
 
 gate = StageGate(audit=JsonlAuditLog("audit.jsonl"))
 
+
 @gate.capability(
     "tickets.transition",
-    stage=Stage.OBSERVE,                       # shadow mode: records, does not run
+    stage=Stage.OBSERVE,  # shadow mode: records, does not run
     risk=RiskTier.HIGH,
-    describe="Move {ticket_id} to {status}",   # what a human reads when asked to approve
+    describe="Move {ticket_id} to {status}",  # what a human reads when asked to approve
 )
 def transition_ticket(ticket_id: str, status: str) -> dict:
     """Change a ticket's state in the real ticketing system."""
     return real_client.transition(ticket_id, status)
 
+
 with agent_run(actor="triage-bot@example.com"):
     result = transition_ticket("T-1001", "in_progress")
 
-result.executed          # False — OBSERVE recorded the intent and ran nothing
-result.event.effect      # 'Move T-1001 to in_progress'
-result.value_or(None)    # None
+result.executed  # False — OBSERVE recorded the intent and ran nothing
+result.event.effect  # 'Move T-1001 to in_progress'
+result.value_or(None)  # None
 ```
 
 Run it for two weeks, then build the report that gets the promotion approved:
@@ -68,7 +73,7 @@ max_stage_by_risk = { critical = "suggest" }   # ceilings only ever lower a stag
 ```python
 from stagegate import StagePolicy, QueueApprovalHandler
 
-approvals = QueueApprovalHandler()             # your web handler calls .resolve(...)
+approvals = QueueApprovalHandler()  # your web handler calls .resolve(...)
 gate = StageGate(
     audit=JsonlAuditLog("audit.jsonl"),
     policy=StagePolicy.from_file("policy.toml"),
@@ -144,4 +149,4 @@ For a tool-calling agent, `gate.invoke("tickets.transition", ticket_id="T-1001",
 
 ## License
 
-MIT. Copyright (c) 2026 Kathleen Bartin.
+MIT. Copyright (c) 2026 Kathleen Bartin. See [LICENSE](LICENSE).

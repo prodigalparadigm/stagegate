@@ -95,7 +95,8 @@ def register_capabilities(gate: StageGate) -> dict[str, Any]:
         """Find open tickets. Read-only; promoted to ACT by policy."""
         query = query.lower()
         return [
-            key for key, value in TICKETS.items()
+            key
+            for key, value in TICKETS.items()
             if query in value["title"].lower() or query in value["priority"].lower()
         ]
 
@@ -179,8 +180,7 @@ def run_agent(gate: StageGate, caps: dict[str, Any]) -> None:
 
             paged = caps["page"]("platform-primary", ticket_id, reporter_email="ada@example.com")
             print(
-                f"oncall.page      -> {paged.outcome.value:9} "
-                f"decision={paged.event.decision.value}"
+                f"oncall.page      -> {paged.outcome.value:9} decision={paged.event.decision.value}"
             )
 
         escalated = caps["escalate"]("T-1003")
@@ -227,8 +227,7 @@ def main(argv: list[str] | None = None) -> int:
 
     check = verify_chain(log_path)
     print(
-        f"\naudit chain: ok={check.ok} records={check.count} "
-        f"head={(check.head_hash or '')[:16]}..."
+        f"\naudit chain: ok={check.ok} records={check.count} head={(check.head_hash or '')[:16]}..."
     )
     print(f"audit log  : {log_path}")
 

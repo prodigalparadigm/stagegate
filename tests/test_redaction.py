@@ -20,8 +20,20 @@ from stagegate.redaction import normalise_key
 
 @pytest.mark.parametrize(
     "key",
-    ["password", "API_KEY", "api-key", "apiKey", "Authorization", "client_secret",
-     "refresh_token", "ssn", "credit_card", "email", "phone_number", "iban"],
+    [
+        "password",
+        "API_KEY",
+        "api-key",
+        "apiKey",
+        "Authorization",
+        "client_secret",
+        "refresh_token",
+        "ssn",
+        "credit_card",
+        "email",
+        "phone_number",
+        "iban",
+    ],
 )
 def test_known_secret_and_pii_key_names_are_redacted(key: str) -> None:
     assert RedactionPolicy()({key: "sensitive"})[key] == REDACTED
@@ -34,7 +46,10 @@ def test_naming_style_does_not_defeat_a_rule() -> None:
 def test_ordinary_arguments_pass_through_unchanged() -> None:
     policy = RedactionPolicy()
     assert policy({"ticket_id": "T-1001", "count": 3, "ok": True, "ratio": 0.5}) == {
-        "ticket_id": "T-1001", "count": 3, "ok": True, "ratio": 0.5,
+        "ticket_id": "T-1001",
+        "count": 3,
+        "ok": True,
+        "ratio": 0.5,
     }
 
 
@@ -244,6 +259,7 @@ def test_the_approver_sees_the_same_redacted_view_as_the_log(sink) -> None:
 
 def test_a_redactor_that_raises_withholds_everything(sink, calls) -> None:
     """Fail closed on the arguments; you lose the values, not the event."""
+
     def broken(arguments):
         raise ValueError("policy is misconfigured")
 

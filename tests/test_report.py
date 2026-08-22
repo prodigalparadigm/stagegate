@@ -354,9 +354,9 @@ def test_each_intended_effect_names_the_runs_it_came_from(shadow_log: Path) -> N
     assert all(cid.startswith("run-") for cid in group.correlation_ids)
 
     payload = report.to_dict()
-    effects = next(
-        c for c in payload["capabilities"] if c["capability"] == "tickets.transition"
-    )["intended_effects"]
+    effects = next(c for c in payload["capabilities"] if c["capability"] == "tickets.transition")[
+        "intended_effects"
+    ]
     assert effects[0]["example_runs"] == list(group.correlation_ids)
 
 

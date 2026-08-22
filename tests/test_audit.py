@@ -401,6 +401,7 @@ def test_stream_sink_writes_verifiable_jsonl() -> None:
 
 def test_a_capability_that_cannot_be_audited_does_not_run(sink, calls) -> None:
     """strict_audit means the record is a precondition for the action."""
+
     class DeadSink(InMemoryAuditLog):
         def preflight(self) -> None:
             raise AuditWriteError("volume unmounted")
@@ -498,12 +499,16 @@ def test_exactly_one_record_per_call_on_every_path(tmp_path: Path, calls) -> Non
 
     assert verify_chain(path).count == 4
     assert [r["capability"] for r in lines(path)] == [
-        "demo.observe", "demo.denied", "demo.acted", "demo.failed",
+        "demo.observe",
+        "demo.denied",
+        "demo.acted",
+        "demo.failed",
     ]
 
 
 def test_mirror_failures_are_capped_so_a_broken_sink_is_not_a_leak() -> None:
     """One exception object per audited call, retained forever, is a slow leak."""
+
     class AlwaysBroken:
         def emit(self, event: AuditEvent) -> AuditEvent:
             raise AuditWriteError("mirror is down")

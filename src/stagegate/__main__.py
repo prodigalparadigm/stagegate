@@ -45,9 +45,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     verify = sub.add_parser("verify", help="check an audit log's hash chain")
     verify.add_argument("log", help="path to a JSONL audit log")
-    verify.add_argument(
-        "--quiet", action="store_true", help="print nothing; rely on the exit code"
-    )
+    verify.add_argument("--quiet", action="store_true", help="print nothing; rely on the exit code")
     return parser
 
 

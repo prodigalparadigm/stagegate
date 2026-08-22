@@ -53,6 +53,7 @@ from .stages import Decision, Outcome, RiskTier, Stage
 
 __all__ = ["StageGate", "Capability", "CapabilityResult"]
 
+
 def _first_line(text: str | None) -> str:
     """First non-empty line of a docstring, or ``""``. Never raises on odd input."""
     for line in (text or "").splitlines():
@@ -303,6 +304,7 @@ class StageGate:
             ConfigurationError: on a duplicate name, or an unparseable stage or
                 risk tier.
         """
+
         def decorator(func: Callable[P, T]) -> Callable[P, CapabilityResult[T]]:
             if inspect.iscoroutinefunction(func):
                 raise ConfigurationError(
@@ -547,9 +549,7 @@ class StageGate:
         merged = {**self.labels, **run_labels} if self.labels else run_labels
         return merged or None
 
-    def _redact(
-        self, redactor: Redactor, raw: Mapping[str, Any]
-    ) -> tuple[dict[str, Any], bool]:
+    def _redact(self, redactor: Redactor, raw: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
         """Apply redaction, withholding everything if the policy itself fails.
 
         A redactor that raises must not result in raw arguments being logged. The
@@ -561,9 +561,7 @@ class StageGate:
         except Exception:  # noqa: BLE001 - fail closed on the arguments, not the call
             return {"[REDACTION_FAILED]": sorted(str(k) for k in raw)}, True
 
-    def _describe(
-        self, entry: Capability, arguments: Mapping[str, Any], redactor: Redactor
-    ) -> str:
+    def _describe(self, entry: Capability, arguments: Mapping[str, Any], redactor: Redactor) -> str:
         """Phrase the intended effect. Always from redacted arguments, always scrubbed."""
         describe = entry.describe
         text: str
@@ -616,9 +614,7 @@ class StageGate:
             )
 
         timeout = (
-            entry.approval_timeout
-            if entry.approval_timeout is not None
-            else self.approval_timeout
+            entry.approval_timeout if entry.approval_timeout is not None else self.approval_timeout
         )
         request = ApprovalRequest(
             request_id=new_id("apr"),
@@ -679,9 +675,7 @@ class StageGate:
         if not isinstance(error, Exception):
             return True
         return (
-            entry.propagate_errors
-            if entry.propagate_errors is not None
-            else self.propagate_errors
+            entry.propagate_errors if entry.propagate_errors is not None else self.propagate_errors
         )
 
     def _error_record(

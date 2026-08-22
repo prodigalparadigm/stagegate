@@ -156,6 +156,7 @@ class AuditEvent:
         Unknown stages/outcomes from a newer writer degrade to sensible defaults
         rather than raising, so an old reader can still summarise a new log.
         """
+
         def _enum(enum_cls: Any, value: Any, fallback: Any) -> Any:
             try:
                 return enum_cls(value)
@@ -588,22 +589,30 @@ def verify_chain(path: str | os.PathLike[str]) -> ChainVerification:
                 seq = record.get("seq")
                 if seq != expected_seq:
                     return ChainVerification(
-                        False, count, expected_seq,
+                        False,
+                        count,
+                        expected_seq,
                         f"line {line_no}: expected seq {expected_seq}, found {seq!r} "
-                        f"(a record was removed, reordered, or inserted)", prev,
+                        f"(a record was removed, reordered, or inserted)",
+                        prev,
                     )
                 if record.get("prev_hash") != prev:
                     return ChainVerification(
-                        False, count, expected_seq,
-                        f"line {line_no}: prev_hash does not match the previous "
-                        f"record's hash", prev,
+                        False,
+                        count,
+                        expected_seq,
+                        f"line {line_no}: prev_hash does not match the previous record's hash",
+                        prev,
                     )
                 digest = chain_digest(record, prev)
                 if record.get("hash") != digest:
                     return ChainVerification(
-                        False, count, expected_seq,
+                        False,
+                        count,
+                        expected_seq,
                         f"line {line_no}: contents do not match the recorded hash "
-                        f"(record was modified after it was written)", prev,
+                        f"(record was modified after it was written)",
+                        prev,
                     )
                 prev = digest
                 count += 1

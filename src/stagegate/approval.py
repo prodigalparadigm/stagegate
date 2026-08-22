@@ -220,11 +220,7 @@ class CLIApprovalHandler:
             raise TimeoutError("approval timed out")
 
         answer = answer.strip()
-        approved = (
-            answer == request.capability
-            if needs_typed
-            else answer.lower() in _APPROVE_WORDS
-        )
+        approved = answer == request.capability if needs_typed else answer.lower() in _APPROVE_WORDS
         self._say(out, f"-> {'approved' if approved else 'denied'}\n")
         return ApprovalResponse(
             approved,

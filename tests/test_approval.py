@@ -166,9 +166,7 @@ def test_queue_handler_blocks_until_another_thread_resolves() -> None:
 
     request = handler.next_request(timeout=2.0)
     assert request is not None
-    delivered = handler.resolve(
-        request.request_id, True, actor="ops@example.com", note="checked"
-    )
+    delivered = handler.resolve(request.request_id, True, actor="ops@example.com", note="checked")
     assert delivered is True
 
     thread.join(timeout=5.0)
@@ -231,9 +229,7 @@ def test_pending_exposes_what_is_waiting() -> None:
     handler = QueueApprovalHandler()
     outcome: list[BaseException | None] = []
     thread = threading.Thread(
-        target=lambda: outcome.append(
-            _call_and_capture(handler, make_request(timeout=0.5))
-        )
+        target=lambda: outcome.append(_call_and_capture(handler, make_request(timeout=0.5)))
     )
     thread.start()
     deadline = time.monotonic() + 2.0
@@ -360,9 +356,7 @@ def test_a_duplicate_pending_request_id_is_refused() -> None:
     handler = QueueApprovalHandler()
     outcome: list[BaseException | None] = []
     thread = threading.Thread(
-        target=lambda: outcome.append(
-            _call_and_capture(handler, make_request(timeout=1.0))
-        )
+        target=lambda: outcome.append(_call_and_capture(handler, make_request(timeout=1.0)))
     )
     thread.start()
     deadline = time.monotonic() + 2.0
@@ -431,6 +425,8 @@ def test_notification_failures_are_capped_at_the_history_size() -> None:
 
     assert len(handler.notify_errors) == 3, "oldest failures are dropped, not accumulated"
     assert [request_id for request_id, _ in handler.notify_errors] == [
-        "apr-7", "apr-8", "apr-9",
+        "apr-7",
+        "apr-8",
+        "apr-9",
     ]
     assert all(isinstance(exc, ConnectionError) for _, exc in handler.notify_errors)

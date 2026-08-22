@@ -1,0 +1,32 @@
+name: ci
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: uv pip install --system -e ".[dev]"
+
+      - name: Test
+        run: python -m pytest
+
+      # The library declares zero runtime dependencies; the example is the
+      # cheapest check that the claim is still true end to end.
+      - name: Run the example
+        run: python examples/triage_agent.py
+
+      - name: Lint
+        run: ruff check . && ruff format --check .
+
+      - name: Types
+        run: mypy

@@ -128,9 +128,12 @@ class CapabilityReport:
 
         if self.distinct_effects <= 1 and self.calls > 5:
             rows.append(
-                ("effect variety", "attention",
-                 "every call produced the same intended effect; the sample may not "
-                 "exercise the interesting paths")
+                (
+                    "effect variety",
+                    "attention",
+                    "every call produced the same intended effect; the sample may not "
+                    "exercise the interesting paths",
+                )
             )
         else:
             rows.append(
@@ -138,15 +141,21 @@ class CapabilityReport:
             )
 
         rows.append(
-            ("execution evidence", "unknown",
-             "shadow calls never ran, so nothing here shows the action would have "
-             "succeeded against the real system")
+            (
+                "execution evidence",
+                "unknown",
+                "shadow calls never ran, so nothing here shows the action would have "
+                "succeeded against the real system",
+            )
         )
 
         if self.blocked:
             rows.append(
-                ("guard activations", "attention",
-                 f"{self.blocked} call(s) blocked by a kill switch or unavailable audit sink")
+                (
+                    "guard activations",
+                    "attention",
+                    f"{self.blocked} call(s) blocked by a kill switch or unavailable audit sink",
+                )
             )
 
         if self.errors:
@@ -156,9 +165,12 @@ class CapabilityReport:
 
         if self.risk_tier.rank >= RiskTier.HIGH.rank:
             rows.append(
-                ("risk tier", "attention",
-                 f"declared {self.risk_tier.value}; promotion past SUGGEST should be an "
-                 "explicit, named decision")
+                (
+                    "risk tier",
+                    "attention",
+                    f"declared {self.risk_tier.value}; promotion past SUGGEST should be an "
+                    "explicit, named decision",
+                )
             )
         return rows
 
@@ -506,9 +518,7 @@ def build_report(
         ]
 
     window = (min(timestamps), max(timestamps)) if timestamps else None
-    ordered = sorted(
-        by_name.values(), key=lambda c: (-c.risk_tier.rank, -c.calls, c.name)
-    )
+    ordered = sorted(by_name.values(), key=lambda c: (-c.risk_tier.rank, -c.calls, c.name))
     return DryRunReport(
         generated_at=utc_now(),
         source=source,

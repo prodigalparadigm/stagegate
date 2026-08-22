@@ -99,8 +99,13 @@ def test_the_readme_quickstart_imports_resolve() -> None:
 
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for name in (
-        "StageGate", "Stage", "RiskTier", "JsonlAuditLog", "agent_run",
-        "StagePolicy", "QueueApprovalHandler",
+        "StageGate",
+        "Stage",
+        "RiskTier",
+        "JsonlAuditLog",
+        "agent_run",
+        "StagePolicy",
+        "QueueApprovalHandler",
     ):
         assert name in readme
         assert hasattr(stagegate, name)
@@ -109,7 +114,11 @@ def test_the_readme_quickstart_imports_resolve() -> None:
 def test_the_cli_entry_point_is_wired_up() -> None:
     result = subprocess.run(
         [sys.executable, "-m", "stagegate", "--help"],
-        capture_output=True, text=True, timeout=60, cwd=ROOT, check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        cwd=ROOT,
+        check=False,
     )
     assert result.returncode == 0
     assert "report" in result.stdout and "verify" in result.stdout
@@ -137,6 +146,7 @@ def test_the_shipped_implementations_satisfy_the_protocols_they_advertise() -> N
         assert isinstance(handler, stagegate.ApprovalHandler), type(handler).__name__
 
     assert isinstance(stagegate.RedactionPolicy(), stagegate.Redactor)
+
     def plain_function_redactor(arguments):
         return dict(arguments)
 
@@ -164,7 +174,11 @@ def test_the_readme_quickstart_commands_are_the_ones_that_exist() -> None:
         subcommand = command.split()[1]
         result = subprocess.run(
             [sys.executable, "-m", "stagegate", subcommand, "--help"],
-            capture_output=True, text=True, timeout=60, cwd=ROOT, check=False,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            cwd=ROOT,
+            check=False,
         )
         assert result.returncode == 0, result.stderr
 
@@ -181,7 +195,11 @@ def test_the_declared_test_count_in_the_readme_is_true() -> None:
 
     result = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider"],
-        capture_output=True, text=True, timeout=180, cwd=ROOT, check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+        cwd=ROOT,
+        check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
     collected = _collected_count(result.stdout)

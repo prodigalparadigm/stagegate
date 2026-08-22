@@ -261,6 +261,7 @@ def test_duplicate_registration_is_refused(gate: StageGate) -> None:
     def one() -> None: ...
 
     with pytest.raises(ConfigurationError, match="already registered"):
+
         @gate.capability("demo.dup", stage=Stage.ACT)
         def two() -> None: ...
 
@@ -279,12 +280,14 @@ def test_duplicate_registration_is_allowed_when_explicit(gate: StageGate) -> Non
 
 def test_async_capabilities_are_rejected_loudly(gate: StageGate) -> None:
     with pytest.raises(ConfigurationError, match="coroutine function"):
+
         @gate.capability("demo.async", stage=Stage.ACT)
         async def do() -> None: ...
 
 
 def test_bad_stage_string_is_a_configuration_error(gate: StageGate) -> None:
     with pytest.raises(ConfigurationError, match="unknown stage"):
+
         @gate.capability("demo.bad", stage="sometimes")
         def do() -> None: ...
 
@@ -326,6 +329,7 @@ def test_the_wrapper_keeps_the_original_reachable_for_testing(gate: StageGate, c
 
 def test_binding_failure_still_produces_a_record(gate: StageGate) -> None:
     """A TypeError from a bad call should not lose the audit record."""
+
     @gate.capability("demo.strict", stage=Stage.ACT)
     def strict(required: str) -> str:
         return required

@@ -43,7 +43,11 @@ def test_only_execution_outcomes_report_as_executed() -> None:
     assert Outcome.EXECUTED.executed
     assert Outcome.FAILED.executed
     for outcome in (
-        Outcome.RECORDED, Outcome.DENIED, Outcome.TIMED_OUT, Outcome.BLOCKED, Outcome.ERROR,
+        Outcome.RECORDED,
+        Outcome.DENIED,
+        Outcome.TIMED_OUT,
+        Outcome.BLOCKED,
+        Outcome.ERROR,
     ):
         assert not outcome.executed
 
@@ -53,8 +57,18 @@ def test_enum_values_are_the_documented_wire_format() -> None:
     assert [s.value for s in Stage] == ["observe", "suggest", "act"]
     assert [r.value for r in RiskTier] == ["low", "moderate", "high", "critical"]
     assert [d.value for d in Decision] == [
-        "not_required", "approved", "denied", "timed_out", "error",
+        "not_required",
+        "approved",
+        "denied",
+        "timed_out",
+        "error",
     ]
     assert [o.value for o in Outcome] == [
-        "recorded", "executed", "failed", "denied", "timed_out", "blocked", "error",
+        "recorded",
+        "executed",
+        "failed",
+        "denied",
+        "timed_out",
+        "blocked",
+        "error",
     ]

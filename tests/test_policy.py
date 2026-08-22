@@ -127,9 +127,7 @@ def test_describe_renders_the_policy_for_a_startup_log() -> None:
     described = policy.describe()
     assert "ceiling for all capabilities: suggest" in described
     assert "override a.b -> act" in described
-    assert StagePolicy().describe() == [
-        "no overrides; every capability runs at its declared stage"
-    ]
+    assert StagePolicy().describe() == ["no overrides; every capability runs at its declared stage"]
 
 
 def test_the_shipped_example_policy_loads() -> None:

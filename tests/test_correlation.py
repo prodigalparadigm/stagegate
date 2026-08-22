@@ -43,6 +43,7 @@ def test_a_call_outside_any_run_still_gets_an_id(gate: StageGate, sink) -> None:
 
 def test_an_upstream_id_can_be_adopted(gate: StageGate, sink) -> None:
     """Stitches the audit trail to whatever tracing the rest of the system uses."""
+
     @gate.capability("demo.one", stage=Stage.ACT)
     def one() -> None: ...
 
@@ -94,6 +95,7 @@ def test_three_levels_of_nesting_form_a_chain(gate: StageGate, sink) -> None:
 
 def test_the_parent_scope_is_restored_after_a_nested_call(gate: StageGate, sink) -> None:
     """Two siblings must both point at the parent, not at each other."""
+
     @gate.capability("demo.leaf", stage=Stage.ACT)
     def leaf() -> None: ...
 

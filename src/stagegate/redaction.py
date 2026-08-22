@@ -54,23 +54,72 @@ _DEPTH = "[MAX_DEPTH]"
 
 DEFAULT_SECRET_KEYS: frozenset[str] = frozenset(
     {
-        "password", "passwd", "pwd", "secret", "secrets", "token", "accesstoken",
-        "refreshtoken", "idtoken", "apikey", "apisecret", "authorization", "auth",
-        "credential", "credentials", "privatekey", "secretkey", "clientsecret",
-        "sessionkey", "sessionid", "cookie", "bearer", "signature", "otp", "mfacode",
-        "pin", "passphrase", "salt",
+        "password",
+        "passwd",
+        "pwd",
+        "secret",
+        "secrets",
+        "token",
+        "accesstoken",
+        "refreshtoken",
+        "idtoken",
+        "apikey",
+        "apisecret",
+        "authorization",
+        "auth",
+        "credential",
+        "credentials",
+        "privatekey",
+        "secretkey",
+        "clientsecret",
+        "sessionkey",
+        "sessionid",
+        "cookie",
+        "bearer",
+        "signature",
+        "otp",
+        "mfacode",
+        "pin",
+        "passphrase",
+        "salt",
     }
 )
 """Argument names treated as credentials. Normalised form (see :func:`normalise_key`)."""
 
 DEFAULT_PII_KEYS: frozenset[str] = frozenset(
     {
-        "ssn", "socialsecuritynumber", "nationalid", "taxid", "ein", "dob",
-        "dateofbirth", "birthdate", "creditcard", "cardnumber", "pan", "cvv", "cvc",
-        "accountnumber", "routingnumber", "iban", "bic", "swift", "email",
-        "emailaddress", "phone", "phonenumber", "mobile", "address", "streetaddress",
-        "postaladdress", "zipcode", "postcode", "passportnumber", "driverslicense",
-        "medicalrecordnumber", "mrn",
+        "ssn",
+        "socialsecuritynumber",
+        "nationalid",
+        "taxid",
+        "ein",
+        "dob",
+        "dateofbirth",
+        "birthdate",
+        "creditcard",
+        "cardnumber",
+        "pan",
+        "cvv",
+        "cvc",
+        "accountnumber",
+        "routingnumber",
+        "iban",
+        "bic",
+        "swift",
+        "email",
+        "emailaddress",
+        "phone",
+        "phonenumber",
+        "mobile",
+        "address",
+        "streetaddress",
+        "postaladdress",
+        "zipcode",
+        "postcode",
+        "passportnumber",
+        "driverslicense",
+        "medicalrecordnumber",
+        "mrn",
     }
 )
 """Argument names treated as personal data. Normalised form."""
@@ -187,10 +236,7 @@ class RedactionPolicy:
     def __call__(self, arguments: Mapping[str, Any]) -> dict[str, Any]:
         """Return a sanitised, JSON-serialisable copy of ``arguments``."""
         seen: set[int] = set()
-        return {
-            str(key): self._walk(value, str(key), 0, seen)
-            for key, value in arguments.items()
-        }
+        return {str(key): self._walk(value, str(key), 0, seen) for key, value in arguments.items()}
 
     def _salt_bytes(self) -> bytes | None:
         raw = self.salt if self.salt is not None else os.environ.get("STAGEGATE_REDACTION_SALT")
