@@ -20,15 +20,15 @@ jobs:
           uv pip install -e ".[dev]"
 
       - name: Test
-        run: uv run python -m pytest
+        run: .venv/bin/python -m pytest
 
       # The library declares zero runtime dependencies; the example is the
       # cheapest check that the claim is still true end to end.
       - name: Run the example
-        run: uv run python examples/triage_agent.py
+        run: .venv/bin/python examples/triage_agent.py
 
       - name: Lint
-        run: uv run ruff check . && uv run ruff format --check .
+        run: .venv/bin/ruff check . && .venv/bin/ruff format --check .
 
       - name: Types
-        run: uv run mypy
+        run: .venv/bin/mypy
