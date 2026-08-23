@@ -145,6 +145,10 @@ For a tool-calling agent, `gate.invoke("tickets.transition", ticket_id="T-1001",
 - **Redaction is best-effort pattern matching.** The key list and value patterns catch the common shapes; they will not catch a secret passed as an unusually-named string that matches no pattern. Treat it as defence in depth, not a guarantee, and narrow the policy per capability where it matters.
 - **No persistence for pending approvals.** `QueueApprovalHandler` keeps them in memory; a process restart loses them, and the blocked calls die with it. Durable approvals need a sink-backed handler, which is left to the deployment.
 
+## Authorship
+
+Kathleen Bartin, with Claude. Co-authored at Prodigal Paradigm LLC in August 2026 using Claude Code: the design decisions, the tests, and this README were produced together. The co-byline is the house standard, not small print.
+
 ## License
 
 MIT. Copyright (c) 2026 Kathleen Bartin. See [LICENSE](LICENSE).
